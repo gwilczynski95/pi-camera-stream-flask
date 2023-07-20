@@ -9,7 +9,7 @@ def main():
     camera = PiCamera()
 
     camera.start_preview()
-    camera.start_recording(out_path)
+    camera.start_recording(out_path, format="h264")
     sleep(sleep_time_s)
     camera.stop_recording()
     camera.stop_preview()

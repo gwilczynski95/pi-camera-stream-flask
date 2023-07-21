@@ -1,10 +1,111 @@
 # Taken from: https://automaticaddison.com/motion-detection-using-opencv-on-raspberry-pi-4/
-
+import abc
 from pathlib import Path
 import time
 
 import cv2
 import numpy as np
+
+
+class SignalDetector:
+    def __init__(self, alpha: float = 0., beta: float = 0.99, gamma: float = 0.99, sigma_factor: float = 18.,
+                 warmup_length: int = 100, cooldown_length: int = 100):
+        self._alpha = None
+        self._beta = None
+        self._gamma = None
+        self._sigma_factor = None
+        self._avg_signal = None
+        self._mean_avg_signal = None
+        self._std_avg_signal = None
+        self._warmup = None
+        self._warmup_length = None
+        self._cooldown = None
+        self._cooldown_length = None
+        self._detected = None
+        self.reset(alpha, beta, gamma, sigma_factor, warmup_length, cooldown_length)
+
+    def reset(self, alpha: float = 0.0, beta: float = 0.99, gamma: float = 0.99, sigma_factor: float = 18.,
+              warmup_length: int = 100, cooldown_length: int = 100):
+        self._alpha = alpha
+        self._beta = beta
+        self._gamma = gamma
+        self._sigma_factor = sigma_factor
+        self._avg_signal = None
+        self._mean_avg_signal = None
+        self._std_avg_signal = None
+        self._warmup = warmup_length
+        self._warmup_length = warmup_length
+        self._cooldown = 0
+        self._cooldown_length = cooldown_length
+        self._detected = False
+
+    @abc.abstractmethod
+    def update(self, *args):
+        raise NotImplementedError()
+
+    def _update_avg_signal(self, signal):
+        if self._avg_signal is None:
+            self._avg_signal = signal
+        self._avg_signal = self._alpha * self._avg_signal + (1. - self._alpha) * signal
+
+    def _update_mean_avg_signal(self, signal_to_mean_avg):
+        if self._mean_avg_signal is None:
+            self._mean_avg_signal = signal_to_mean_avg
+        self._mean_avg_signal = self._beta * self._mean_avg_signal + (1. - self._beta) * signal_to_mean_avg
+
+    def _update_std_avg_signal(self, deviation_signal):
+        avg_signal_deviation = np.abs(deviation_signal - self._mean_avg_signal)
+        if self._std_avg_signal is None:
+            self._std_avg_signal = avg_signal_deviation
+        self._std_avg_signal = self._gamma * self._std_avg_signal + (1 - self._gamma) * avg_signal_deviation
+
+    def _check_final_conditions(self, condition_signal):
+        # if self._warmup > 0 or self._cooldown > 0:
+        #     if self._warmup > 0:
+        #         self._warmup -= 1
+        #     if self._cooldown > 0:
+        #         self._cooldown -= 1
+        #     self._fire_detected = False
+        # else:
+        avg_signal_lower_bound = self._mean_avg_signal - self._sigma_factor * self._std_avg_signal
+        avg_signal_upper_bound = self._mean_avg_signal + self._sigma_factor * self._std_avg_signal
+
+        self._detected = np.logical_or(
+            condition_signal < avg_signal_lower_bound, condition_signal > avg_signal_upper_bound
+        ).astype(np.uint8) * 255
+        # if self._fire_detected:
+        #     self._cooldown = self._cooldown_length
+
+    @property
+    def fire_detected(self):
+        return self._detected
+
+
+class MovementDetector(SignalDetector):
+    def __init__(self, alpha: float = 0.0, beta: float = 0.99, gamma: float = 0.99, sigma_factor: float = 18.0,
+                 warmup_length: int = 100, cooldown_length: int = 100):
+        self._prev_avg_signal = None
+        super(MovementDetector, self).__init__(alpha, beta, gamma, sigma_factor, warmup_length, cooldown_length)
+
+    def reset(self, alpha: float = 0.0, beta: float = 0.99, gamma: float = 0.99, sigma_factor: float = 18.0,
+              warmup_length: int = 100, cooldown_length: int = 100):
+        self._prev_avg_signal = None
+        super(MovementDetector, self).reset(alpha, beta, gamma, sigma_factor, warmup_length, cooldown_length)
+
+    def update(self, frame: np.ndarray):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (21, 21), 0).copy().astype("float")
+        self._update_avg_signal(gray)
+
+        if self._prev_avg_signal is None:
+            self._prev_avg_signal = self._avg_signal
+        avg_signal_gradient = self._avg_signal - self._prev_avg_signal
+        self._prev_avg_signal = self._avg_signal
+
+        self._update_mean_avg_signal(avg_signal_gradient)
+        self._update_std_avg_signal(avg_signal_gradient)
+        self._check_final_conditions(avg_signal_gradient)
+        return self._detected
 
 
 def load_video(path):
@@ -62,11 +163,12 @@ def main():
     path_to_video = Path("/Users/gwilczynski/projects/cats/pi-camera-stream-flask/scripts/recording.h264")
     video = load_video(path_to_video)
 
-    analyser = FrameAnalyser(thresh_val=10)
-
+    # analyser = FrameAnalyser(thresh_val=10)
+    analyser = MovementDetector()
     for frame in video:
-        parsed_frame = analyser.perform_simple_adaptive(frame)
+        # parsed_frame = analyser.perform_simple_adaptive(frame)
         # parsed_frame = analyser.perform_mog2(frame)
+        parsed_frame = analyser.update(frame)
         # Display the resulting frame
         cv2.imshow("Frame", parsed_frame)
         # cv2.imshow("Frame", frame)

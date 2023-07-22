@@ -81,21 +81,19 @@ class SignalDetector:
         return self._detected
 
 
-class MovementDetector(SignalDetector):
+class AdaptiveDetector(SignalDetector):
     def __init__(self, alpha: float = 0.0, beta: float = 0.99, gamma: float = 0.99, sigma_factor: float = 18.0,
                  warmup_length: int = 100, cooldown_length: int = 100):
         self._prev_avg_signal = None
-        super(MovementDetector, self).__init__(alpha, beta, gamma, sigma_factor, warmup_length, cooldown_length)
+        super(AdaptiveDetector, self).__init__(alpha, beta, gamma, sigma_factor, warmup_length, cooldown_length)
 
     def reset(self, alpha: float = 0.0, beta: float = 0.99, gamma: float = 0.99, sigma_factor: float = 18.0,
               warmup_length: int = 100, cooldown_length: int = 100):
         self._prev_avg_signal = None
-        super(MovementDetector, self).reset(alpha, beta, gamma, sigma_factor, warmup_length, cooldown_length)
+        super(AdaptiveDetector, self).reset(alpha, beta, gamma, sigma_factor, warmup_length, cooldown_length)
 
     def update(self, frame: np.ndarray):
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (21, 21), 0).copy().astype("float")
-        self._update_avg_signal(gray)
+        self._update_avg_signal(frame)
 
         if self._prev_avg_signal is None:
             self._prev_avg_signal = self._avg_signal
@@ -106,6 +104,26 @@ class MovementDetector(SignalDetector):
         self._update_std_avg_signal(avg_signal_gradient)
         self._check_final_conditions(avg_signal_gradient)
         return self._detected
+
+
+class MovementDetector:
+    def __init__(self, detector, fraction: float = 0.02, blur_ker_sz: tuple = (21, 21), dilation_iters: int = 2):
+        self.detector = detector
+        self.fraction = fraction
+        self.blur_ker_sz = blur_ker_sz
+        self.dilation_iters = dilation_iters
+
+    def analyse(self, frame: np.ndarray):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if self.blur_ker_sz is not None:
+            gray = cv2.GaussianBlur(gray, self.blur_ker_sz, 0).copy().astype("float")
+
+        detected = self.detector.update(gray)
+        if self.dilation_iters:
+            detected = cv2.dilate(detected, None, iterations=self.dilation_iters)
+
+        # todo: check if sum(bool) is ok
+        return np.sum(detected.astype(bool)) >= self.fraction * np.prod(detected.shape)
 
 
 def load_video(path):
@@ -164,7 +182,7 @@ def main():
     video = load_video(path_to_video)
 
     # analyser = FrameAnalyser(thresh_val=10)
-    analyser = MovementDetector()
+    analyser = AdaptiveDetector()
     for frame in video:
         # parsed_frame = analyser.perform_simple_adaptive(frame)
         # parsed_frame = analyser.perform_mog2(frame)

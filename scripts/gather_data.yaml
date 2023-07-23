@@ -1,0 +1,20 @@
+# Path to directory where the gathering script should save clips
+output_path: ""
+# How many seconds to store before the movement was detected
+seconds_before: 30
+# How many seconds to store after the movement was detected
+seconds_after: 60
+detection_algorithm:
+  name: "adaptive"
+  minor_kwargs:
+    alpha: 0.
+    beta: 0.99
+    gamma: 0.99
+    sigma_factor: 18.
+  major_kwargs:
+    fraction: 0.2,
+    blur_ker_sz: (21, 21),
+    dilation_iters: 2
+frame_rate: 15
+resolution: (640, 480)
+video_extension: ".mp4"

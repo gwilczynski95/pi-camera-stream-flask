@@ -75,7 +75,7 @@ def main(config: dict):
 
     time.sleep(0.1)
 
-    start_clip = False
+    clip_started = False
     in_bf_buff_state = 0  # if value == len(before_buffer) then it's full
     in_after_buffer_state = frames_after  # if value == 0 then save what was recorded
 
@@ -89,8 +89,8 @@ def main(config: dict):
         else:
             is_detected = detector.analyse(frame)
             if is_detected:
-                if not start_clip:
-                    start_clip = True
+                if not clip_started:
+                    clip_started = True
                     filename = create_out_filename(
                         config["video_extension"],
                         config["seconds_before"]
@@ -105,11 +105,11 @@ def main(config: dict):
                         clip_obj.write(frame)
                 in_after_buffer_state = frames_after
                 clip_obj.write(frame)
-            elif not is_detected and in_after_buffer_state >= 0 and start_clip:
+            elif not is_detected and in_after_buffer_state >= 0 and clip_started:
                 in_after_buffer_state -= 1
                 clip_obj.append(frame)
                 if in_after_buffer_state == -1:
-                    start_clip = False
+                    clip_started = False
                     clip_obj.release()
             else:
                 before_buffer = np.roll(before_buffer, 1, axis=0)

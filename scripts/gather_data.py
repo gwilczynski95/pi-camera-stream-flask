@@ -1,5 +1,5 @@
 import argparse
-from datetime import datetime
+import datetime
 from pathlib import Path
 import time
 
@@ -49,6 +49,12 @@ def init_camera(config: dict):
     return camera, raw_capture
 
 
+def create_out_filename(extension, seconds_before, strf="%Y-%m-%d_%H:%M:%S"):
+    curr_datetime = current_time() - datetime.timedelta(seconds=seconds_before)
+    datetime_str = str(curr_datetime.strftime(strf))
+    return f"{datetime_str}{extension}"
+
+
 def main(config: dict):
     output_path = config["output_path"]
     output_path.mkdir(parents=True, exist_ok=True)
@@ -64,13 +70,6 @@ def main(config: dict):
     )
 
     fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-    out = cv2.VideoWriter(
-        'output.mp4',
-        fourcc,
-        config["frame_rate"],
-        config["resolution"]
-    )
-    out.release()
 
     camera, raw_capture = init_camera(config)
 
@@ -92,7 +91,10 @@ def main(config: dict):
             if is_detected:
                 if not start_clip:
                     start_clip = True
-                    filename = f"{config['video_extension']}"
+                    filename = create_out_filename(
+                        config["video_extension"],
+                        config["seconds_before"]
+                    )
                     clip_obj = cv2.VideoWriter(
                         filename,
                         fourcc,

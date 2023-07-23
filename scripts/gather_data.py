@@ -62,8 +62,8 @@ def main(config: dict):
     # init detector and camera
     detector = create_detector(config["detection_algorithm"])
 
-    frames_before = int(config["seconds_before"] / 60. * config["frame_rate"])  # todo: this is bad, fix this
-    frames_after = int(config["seconds_after"] / 60. * config["frame_rate"])
+    frames_before = int(config["seconds_before"] * config["frame_rate"])
+    frames_after = int(config["seconds_after"] * config["frame_rate"])
 
     before_buffer = np.zeros(
         [frames_before] + config["resolution"][::-1] + [3], dtype=np.uint8
@@ -114,11 +114,10 @@ def main(config: dict):
                     clip_started = False
                     clip_obj.release()
                     print("Finished clip")
-            else:
-                before_buffer = np.roll(before_buffer, 1, axis=0)
-                before_buffer[
-                    -1, :, :, :
-                ] = frame
+            before_buffer = np.roll(before_buffer, 1, axis=0)
+            before_buffer[
+                -1, :, :, :
+            ] = frame
         raw_capture.truncate(0)
 
 
